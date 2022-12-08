@@ -1,0 +1,8 @@
+name: DirtUtils
+version: '${version}'
+main: gg.dirtcraft.dirtutils.Cli
+
+commands:
+  vanish:
+    description: "Vanished player."
+    usage: "/vanish"
