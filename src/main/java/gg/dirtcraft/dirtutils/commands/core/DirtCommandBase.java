@@ -1,10 +1,7 @@
 package gg.dirtcraft.dirtutils.commands.core;
 
-import gg.dirtcraft.dirtutils.commands.core.exceptions.CommandInitException;
 import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
 import gg.dirtcraft.dirtutils.commands.core.result.CommandResult;
-import gg.dirtcraft.dirtutils.commands.util.ArgContainer;
-import gg.dirtcraft.dirtutils.commands.util.ArgType;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.*;
@@ -21,7 +18,6 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
     private final PluginCommand command;
     private final String primaryAlias;
     private final List<String> defaultAliases = new ArrayList<>();
-    private final List<ArgContainer> expectedArgs = new ArrayList<>();
 
     protected DirtCommandBase(final JavaPlugin javaPlugin, final String primaryAlias) {
         this.javaPlugin = javaPlugin;
@@ -31,7 +27,7 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
 
     public void register() {
         this.command.setAliases(this.computeCommandAliases());
-        this.command.setUsage(this.computeCommandUsage());
+        this.command.setUsage(this.getCommandUsage());
 
         this.command.setExecutor(this);
     }
@@ -47,53 +43,18 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
     private List<String> computeCommandAliases() {
         final List<String> aliases = new ArrayList<>();
 
-        aliases.add(this.primaryAlias);
+        //aliases.add(this.primaryAlias);
         aliases.addAll(this.defaultAliases);
 
         return aliases;
     }
 
-    private String computeCommandUsage() {
-        final StringBuilder s = new StringBuilder("/");
-
-        s.append(this.primaryAlias);
-        this.expectedArgs.forEach(argContainer -> s.append(' ').append(argContainer.toString()));
-
-        return s.toString();
-    }
-
-    public String getCommandUsage() {
-        return this.command.getUsage();
-    }
+    public abstract String getCommandUsage();
 
     protected DirtCommandBase addDefaultAlias(final String alias) {
         this.defaultAliases.add(alias);
 
         return this;
-    }
-
-    protected List<ArgContainer> getExpectedArgs() {
-        return this.expectedArgs;
-    }
-
-    protected DirtCommandBase addExpectedArg(final ArgType argType, final String label) {
-        return this.addExpectedArg(argType, label, false);
-    }
-
-    protected DirtCommandBase addExpectedArg(final ArgType argType, final String label, final boolean isOptional) {
-        this.checkArgs();
-        this.expectedArgs.add(new ArgContainer(argType, label, isOptional));
-
-        return this;
-    }
-
-    /**
-     * Checks if another argument is added after an argument of type TEXT.
-     */
-    private void checkArgs() {
-        if (this.expectedArgs.stream().anyMatch(argContainer -> argContainer.getArgType() == ArgType.TEXT)) {
-            throw new CommandInitException("A text argument can only appear at the end of a command.");
-        }
     }
 
     @Override
