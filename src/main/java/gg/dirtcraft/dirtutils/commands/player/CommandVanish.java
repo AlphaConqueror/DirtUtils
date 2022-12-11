@@ -4,6 +4,7 @@ import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.events.ListenerPriority;
 import com.comphenix.protocol.events.PacketAdapter;
+import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import gg.dirtcraft.dirtutils.commands.core.ArgContainer;
 import gg.dirtcraft.dirtutils.commands.core.ChestData;
@@ -36,13 +37,14 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class CommandVanish extends ParserCommandBase {
 
-    // TODO: Update tab list
+    // TODO: Add locks before/after iterating
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
@@ -222,6 +224,12 @@ public class CommandVanish extends ParserCommandBase {
         this.iOptionLock.unlock();
     }
 
+    /**
+     * Enables or disabled vanishes status of a  player.
+     *
+     * @param player The player that should be vanished.
+     * @param state  If vanish should be enabled or not.
+     */
     private void vanish(final Player player, final boolean state) {
         assert state != this.isVanished(player) : "Tried to un-/vanish player twice!";
 
@@ -255,6 +263,9 @@ public class CommandVanish extends ParserCommandBase {
 
                 this.showPlayer(player, Bukkit.getPlayer(uuid));
             }
+
+            // remove player from tab list for unvanished player
+            //this.removeFromTabList(player, players);
 
             // remove player as target from all creatures in a 70 block radius
             final List<Entity> nearbyEntities = player.getNearbyEntities(70, 70, 70);
@@ -322,6 +333,22 @@ public class CommandVanish extends ParserCommandBase {
 
         // update player in entity tracker entry since Player#showPlayer does not do it properly
         entry.updatePlayer(entityPlayer);
+
+        final PacketContainer packetContainer = new PacketContainer(PacketType.Play.Server.PLAYER_INFO);
+
+        packetContainer.getModifier().writeDefaults();
+        // string that should be displayed in the tab list
+        packetContainer.getStrings().write(0, target.getName());
+        // true = add; false = remove
+        packetContainer.getBooleans().write(0, true);
+        // ping
+        packetContainer.getIntegers().write(0, ((CraftPlayer) target).getHandle().ping);
+
+        try {
+            ProtocolLibrary.getProtocolManager().sendServerPacket(player, packetContainer);
+        } catch (final InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @EventHandler
@@ -353,9 +380,7 @@ public class CommandVanish extends ParserCommandBase {
         }
 
         if (this.hasIOptionEnabled(player)) {
-            this.iOptionLock.lock();
-            this.iOptionList.removeIf(uuid -> uuid.equals(player.getUniqueId()));
-            this.iOptionLock.unlock();
+            this.disableIOption(player);
         }
     }
 
@@ -381,8 +406,6 @@ public class CommandVanish extends ParserCommandBase {
             this.chestInteractionLock.lock();
             this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(), event.getClickedBlock().getLocation()));
             this.chestInteractionLock.unlock();
-
-            System.out.println("Interact: Added chest to interactions."); // debug
         }
     }
 
@@ -401,13 +424,11 @@ public class CommandVanish extends ParserCommandBase {
         chestData.get().verify();
 
         this.chestInteractionLock.unlock();
-
-        System.out.println("Open: Verified chest interaction."); // debug
     }
 
     @EventHandler
     public void onInventoryClose(final InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player) || !this.isVanished((Player) event.getPlayer())) {
+        if (!(event.getPlayer() instanceof Player) || event.getInventory().getHolder() instanceof Player || !this.isVanished((Player) event.getPlayer())) {
             return;
         }
 
@@ -420,7 +441,5 @@ public class CommandVanish extends ParserCommandBase {
         chestData.get().updateMillis();
 
         this.chestInteractionLock.unlock();
-
-        System.out.println("Close: Updated chest interaction."); // debug
     }
 }
