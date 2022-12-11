@@ -44,7 +44,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class CommandVanish extends ParserCommandBase {
 
-    // TODO: Add locks before/after iterating
+    // TODO: ArgContainers could potentially have a data race: fix (pass down as arguments and check instances)
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
@@ -131,6 +131,7 @@ public class CommandVanish extends ParserCommandBase {
                 });
     }
 
+    // is guarded by locks
     private ChestData getMostRecentChestData(final Location loc) {
         ChestData chestData = null;
 
@@ -151,11 +152,8 @@ public class CommandVanish extends ParserCommandBase {
 
     @Override
     protected ICommandResult executePlayerCommand(final Player sender) {
-        final boolean iOption = this.optionArgContainer.getResult();
         final Player otherPlayer = this.playerArgContainer.getResult();
         final String reply;
-
-        System.out.println("Is iOption on? = " + iOption);
 
         if (otherPlayer == null) {
             this.checkPermission(sender, PERM_VANISH_SELF);
@@ -256,6 +254,7 @@ public class CommandVanish extends ParserCommandBase {
             }
 
             // show vanished players to player
+            this.vanishLock.lock();
             for (final UUID uuid : this.vanishedPlayers) {
                 if (uuid.equals(player.getUniqueId())) {
                     continue;
@@ -263,12 +262,14 @@ public class CommandVanish extends ParserCommandBase {
 
                 this.showPlayer(player, Bukkit.getPlayer(uuid));
             }
+            this.vanishLock.unlock();
 
             // remove player from tab list for unvanished player
             //this.removeFromTabList(player, players);
 
             // remove player as target from all creatures in a 70 block radius
             final List<Entity> nearbyEntities = player.getNearbyEntities(70, 70, 70);
+
             for (final Entity entity : nearbyEntities) {
                 if (entity instanceof Creature) {
                     final Creature creature = (Creature) entity;
@@ -299,6 +300,7 @@ public class CommandVanish extends ParserCommandBase {
             }
 
             // hide vanished players from player
+            this.vanishLock.lock();
             for (final UUID uuid : this.vanishedPlayers) {
                 if (uuid.equals(player.getUniqueId())) {
                     continue;
@@ -306,6 +308,7 @@ public class CommandVanish extends ParserCommandBase {
 
                 player.hidePlayer(Bukkit.getPlayer(uuid));
             }
+            this.vanishLock.unlock();
 
             if (this.hasIOptionEnabled(player)) {
                 this.disableIOption(player);
@@ -346,8 +349,8 @@ public class CommandVanish extends ParserCommandBase {
 
         try {
             ProtocolLibrary.getProtocolManager().sendServerPacket(player, packetContainer);
-        } catch (final InvocationTargetException e) {
-            throw new RuntimeException(e);
+        } catch (final InvocationTargetException ignored) {
+            // problem during reflection operations
         }
     }
 
@@ -356,6 +359,7 @@ public class CommandVanish extends ParserCommandBase {
         final Player player = event.getPlayer();
 
         // hide vanished players from player
+        this.vanishLock.lock();
         for (final UUID uuid : this.vanishedPlayers) {
             if (uuid.equals(player.getUniqueId())) {
                 continue;
@@ -363,6 +367,7 @@ public class CommandVanish extends ParserCommandBase {
 
             player.hidePlayer(Bukkit.getPlayer(uuid));
         }
+        this.vanishLock.unlock();
     }
 
     @EventHandler
@@ -437,8 +442,8 @@ public class CommandVanish extends ParserCommandBase {
         final Optional<ChestData> chestData = this.chestInteractions.stream().filter(cd ->
                 cd.getUuid().equals(event.getPlayer().getUniqueId())).findFirst();
 
-        assert chestData.isPresent();
-        chestData.get().updateMillis();
+        // check since the player could've been vanished by other means while having an inventory open
+        chestData.ifPresent(ChestData::updateMillis);
 
         this.chestInteractionLock.unlock();
     }
