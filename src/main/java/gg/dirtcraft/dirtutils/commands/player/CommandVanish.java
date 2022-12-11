@@ -6,6 +6,7 @@ import com.comphenix.protocol.events.ListenerPriority;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketEvent;
 import gg.dirtcraft.dirtutils.commands.core.ArgContainer;
+import gg.dirtcraft.dirtutils.commands.core.ChestData;
 import gg.dirtcraft.dirtutils.commands.core.ParserCommandBase;
 import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
 import gg.dirtcraft.dirtutils.commands.core.result.ICommandResult;
@@ -22,13 +23,14 @@ import org.bukkit.craftbukkit.v1_7_R4.CraftWorld;
 import org.bukkit.craftbukkit.v1_7_R4.entity.CraftPlayer;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryHolder;
@@ -38,9 +40,9 @@ import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-;
-
 public class CommandVanish extends ParserCommandBase {
+
+    // TODO: Update tab list
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
@@ -51,7 +53,7 @@ public class CommandVanish extends ParserCommandBase {
     private final ArgContainer.PlayerArgContainer playerArgContainer = new ArgContainer.PlayerArgContainer("player", true);
     private final ArgContainer.OptionArgContainer optionArgContainer = new ArgContainer.OptionArgContainer("-i");
 
-    private final Map<InventoryHolder, Long> chestInteractionMap = new HashMap<>();
+    private final List<ChestData> chestInteractions = new ArrayList<>();
     private final Lock chestInteractionLock = new ReentrantLock();
 
     public CommandVanish(final JavaPlugin javaPlugin) {
@@ -79,21 +81,15 @@ public class CommandVanish extends ParserCommandBase {
                                     (double) e.getPacket().getIntegers().read(2));
                             final Block block = listener.getWorld().getBlockAt(loc);
 
-                            System.out.println("Action: Is inventory holder?: " + (block.getState() instanceof InventoryHolder));
+                            if (block.getState() instanceof InventoryHolder) {
+                                CommandVanish.this.chestInteractionLock.lock();
+                                final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
 
-                            if ((block.getState() instanceof InventoryHolder)) {
-                                final InventoryHolder inventoryHolder = (InventoryHolder) block.getState();
-
-                                for (final HumanEntity viewer : inventoryHolder.getInventory().getViewers()) {
-                                    if (viewer instanceof Player && CommandVanish.this.isVanished((Player) viewer)) {
-                                        System.out.println("Cancelling packet...");
-                                        e.setCancelled(true);
-                                        break;
-                                    }
+                                if (chestData != null) {
+                                    e.setCancelled(true);
                                 }
+                                CommandVanish.this.chestInteractionLock.unlock();
                             }
-                        } else {
-                            System.out.println(e.getPacket());
                         }
                     }
                 });
@@ -105,17 +101,12 @@ public class CommandVanish extends ParserCommandBase {
                     @Override
                     public void onPacketSending(final PacketEvent e) {
                         if (e.getPacketType() == PacketType.Play.Server.NAMED_SOUND_EFFECT) {
-                            final Player listener = e.getPlayer();
-                            // is the action the chest-opening-sound?
-                            System.out.println(e.getPacket().getStrings().getValues());
-
-                            if (!(e.getPacket().getStrings().read(0)
-                                    .equalsIgnoreCase("random.chestopen") || e
-                                    .getPacket().getStrings().read(0)
-                                    .equalsIgnoreCase("random.chestclosed"))) {
+                            if (!(e.getPacket().getStrings().read(0).equalsIgnoreCase("random.chestopen")
+                                    || e.getPacket().getStrings().read(0).equalsIgnoreCase("random.chestclosed"))) {
                                 return;
                             }
 
+                            final Player listener = e.getPlayer();
                             // divide the location by 8, since it's a bit
                             // obfuscated
                             final Location loc = new Location(listener.getWorld(),
@@ -124,57 +115,36 @@ public class CommandVanish extends ParserCommandBase {
                                     e.getPacket().getIntegers().read(2) / 8.0);
                             final Block block = listener.getWorld().getBlockAt(loc);
 
-                            System.out.println("Sound: is inventory holder?:" + (block.getState() instanceof InventoryHolder));
-
                             if (block.getState() instanceof InventoryHolder) {
-                                final InventoryHolder inventoryHolder = (InventoryHolder) block.getState();
+                                CommandVanish.this.chestInteractionLock.lock();
+                                final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
 
-                                if (e.getPacket().getStrings().read(0)
-                                        .equalsIgnoreCase("random.chestopen")) {
-                                    System.out.println("Sound: step: chest open");
-                                    System.out.println("Viewer count: " + inventoryHolder.getInventory().getViewers().size());
-
-                                    for (final HumanEntity viewer : inventoryHolder.getInventory().getViewers()) {
-                                        if (viewer instanceof Player) {
-                                            System.out.println("Viewer: " + ((Player) viewer).getDisplayName());
-                                        }
-
-                                        if (viewer instanceof Player && CommandVanish.this.isVanished((Player) viewer)) {
-                                            System.out.println("Cancelling random.chestopen packet..."); // debug
-                                            e.setCancelled(true);
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    System.out.println("Sound: step: chest closed");
-
-                                    if (CommandVanish.this.chestInteractionMap.containsKey(inventoryHolder)
-                                            && CommandVanish.this.chestInteractionMap.get(inventoryHolder) + 500 > System.currentTimeMillis()) {
-                                        System.out.println("Cancelling random.chestclosed packet..."); // debug
-                                        e.setCancelled(true);
-                                    }
+                                if (chestData != null) {
+                                    e.setCancelled(true);
                                 }
+                                CommandVanish.this.chestInteractionLock.unlock();
                             }
                         }
                     }
                 });
     }
 
-    private Location add(final Location l, final int x, final int z) {
-        return new Location(l.getWorld(), l.getX() + x, l.getY(), l.getZ() + z);
-    }
+    private ChestData getMostRecentChestData(final Location loc) {
+        ChestData chestData = null;
 
-    private List<Location> getAdjacentBlockLocations(final Location loc) {
-        final List<Location> adjacentBlockLocations = new ArrayList<>();
-        adjacentBlockLocations.add(this.add(loc, 1, 0));
-        adjacentBlockLocations.add(this.add(loc, -1, 0));
-        adjacentBlockLocations.add(this.add(loc, 0, -1));
-        adjacentBlockLocations.add(this.add(loc, 0, 1));
-        adjacentBlockLocations.add(this.add(loc, 1, 1));
-        adjacentBlockLocations.add(this.add(loc, -1, -1));
-        adjacentBlockLocations.add(this.add(loc, 1, -1));
-        adjacentBlockLocations.add(this.add(loc, -1, 1));
-        return adjacentBlockLocations;
+        for (final ChestData cd : new ArrayList<>(CommandVanish.this.chestInteractions)) {
+            // remove invalid data
+            if (!cd.isValid()) {
+                this.chestInteractions.remove(cd);
+                continue;
+            }
+
+            if (cd.isVerified() && cd.getLocation().distance(loc) < 2 && (chestData == null || cd.getMillis() < chestData.getMillis())) {
+                chestData = cd;
+            }
+        }
+
+        return chestData;
     }
 
     @Override
@@ -383,7 +353,9 @@ public class CommandVanish extends ParserCommandBase {
         }
 
         if (this.hasIOptionEnabled(player)) {
-
+            this.iOptionLock.lock();
+            this.iOptionList.removeIf(uuid -> uuid.equals(player.getUniqueId()));
+            this.iOptionLock.unlock();
         }
     }
 
@@ -402,16 +374,35 @@ public class CommandVanish extends ParserCommandBase {
     }
 
     @EventHandler
+    public void onPlayerInteract(final PlayerInteractEvent event) {
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.getClickedBlock().getState() instanceof InventoryHolder
+                && this.isVanished(event.getPlayer())) {
+            this.chestInteractionLock.lock();
+            this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(), event.getClickedBlock().getLocation()));
+            this.chestInteractionLock.unlock();
+
+            System.out.println("Interact: Added chest to interactions."); // debug
+        }
+    }
+
+    @EventHandler
     public void onInventoryOpen(final InventoryOpenEvent event) {
         if (!(event.getPlayer() instanceof Player) || !this.isVanished((Player) event.getPlayer())) {
             return;
         }
 
         this.chestInteractionLock.lock();
-        this.chestInteractionMap.put(event.getInventory().getHolder(), System.currentTimeMillis());
+
+        final Optional<ChestData> chestData = this.chestInteractions.stream().filter(cd ->
+                cd.getUuid().equals(event.getPlayer().getUniqueId()) && !cd.isVerified() && System.currentTimeMillis() - cd.getMillis() < 200).findFirst();
+
+        assert chestData.isPresent();
+        chestData.get().verify();
+
         this.chestInteractionLock.unlock();
 
-        System.out.println("Open: Added chest to interactions map."); // debug
+        System.out.println("Open: Verified chest interaction."); // debug
     }
 
     @EventHandler
@@ -421,9 +412,15 @@ public class CommandVanish extends ParserCommandBase {
         }
 
         this.chestInteractionLock.lock();
-        this.chestInteractionMap.put(event.getInventory().getHolder(), System.currentTimeMillis());
+
+        final Optional<ChestData> chestData = this.chestInteractions.stream().filter(cd ->
+                cd.getUuid().equals(event.getPlayer().getUniqueId())).findFirst();
+
+        assert chestData.isPresent();
+        chestData.get().updateMillis();
+
         this.chestInteractionLock.unlock();
 
-        System.out.println("Close: Added chest to interactions map."); // debug
+        System.out.println("Close: Updated chest interaction."); // debug
     }
 }
