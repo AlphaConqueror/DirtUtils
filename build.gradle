@@ -8,14 +8,18 @@ version = '1.0'
 repositories {
     mavenCentral()
     maven {
-        name = 'mikeprimm'
         url = 'https://repo.mikeprimm.com/'
+    }
+    maven {
+        url = 'https://repo.dmulloy2.net/repository/public/'
     }
 }
 
 dependencies {
     implementation 'org.spigotmc:spigot-api:1.7.10-R0.1-SNAPSHOT'
     implementation 'org.spigotmc:spigot:1.7.10-R0.1-SNAPSHOT'
+
+    compileOnly group: "com.comphenix.protocol", name: "ProtocolLib-Legacy", version: "3.7.0"
 }
 
 def targetJavaVersion = 8

@@ -1,7 +1,7 @@
 package gg.dirtcraft.dirtutils.commands.core;
 
 import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
-import gg.dirtcraft.dirtutils.commands.core.result.CommandResult;
+import gg.dirtcraft.dirtutils.commands.core.result.ICommandResult;
 import org.bukkit.command.BlockCommandSender;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
@@ -31,9 +31,9 @@ public abstract class ParserCommandBase extends DirtCommandBase {
     }
 
     @Override
-    public final CommandResult executeCommand(final CommandSender sender, final String[] args) {
+    public final ICommandResult executeCommand(final CommandSender sender, final String[] args) {
         if (args.length < this.getNeededArgsAmount() || args.length > this.expectedArgs.size()) {
-            return new CommandReplyResult.SyntaxError(this, sender);
+            return new CommandReplyResult.SyntaxError(this);
         }
 
         return super.executeCommand(sender, args);
@@ -44,30 +44,30 @@ public abstract class ParserCommandBase extends DirtCommandBase {
     }
 
     @Override
-    protected final CommandResult executePlayerCommand(final Player sender, final String[] args) {
+    protected final ICommandResult executePlayerCommand(final Player sender, final String[] args) {
         this.parse(args);
         return this.executePlayerCommand(sender);
     }
 
-    protected CommandResult executePlayerCommand(final Player sender) {
+    protected ICommandResult executePlayerCommand(final Player sender) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
     @Override
-    protected final CommandResult executeConsoleCommand(final ConsoleCommandSender sender, final String[] args) {
+    protected final ICommandResult executeConsoleCommand(final ConsoleCommandSender sender, final String[] args) {
         return super.executeConsoleCommand(sender, args);
     }
 
-    protected CommandResult executeConsoleCommand(final Player sender) {
+    protected ICommandResult executeConsoleCommand(final Player sender) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
     @Override
-    protected final CommandResult executeCommandBlockCommand(final BlockCommandSender sender, final String[] args) {
+    protected final ICommandResult executeCommandBlockCommand(final BlockCommandSender sender, final String[] args) {
         return super.executeCommandBlockCommand(sender, args);
     }
 
-    protected CommandResult executeCommandBlockCommand(final Player sender) {
+    protected ICommandResult executeCommandBlockCommand(final Player sender) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 

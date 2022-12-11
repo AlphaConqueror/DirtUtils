@@ -4,5 +4,5 @@ main: gg.dirtcraft.dirtutils.Cli
 
 commands:
   vanish:
-    description: "Vanished player."
-    usage: "/vanish"
+    description: "Hides player from others. Option '-i': enables inventory actions."
+    aliases: [v]
