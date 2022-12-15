@@ -41,7 +41,8 @@ public abstract class ArgContainer<T> {
         final char lBracket = this.isOptional ? '[' : '<';
         final char rBracket = this.isOptional ? ']' : '>';
 
-        return String.format("%c%s%s%s%c", lBracket, this.getTypeName(), (this.getTypeName().isEmpty() ? "" : ": "), this.label, rBracket);
+        return String.format("%c%s%s%s%c", lBracket, this.getTypeName(), (this.getTypeName().isEmpty() ? "" : ": "),
+                this.label, rBracket);
     }
 
     public static class PlayerArgContainer extends ArgContainer<Player> {

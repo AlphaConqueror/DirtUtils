@@ -52,7 +52,8 @@ public class CommandVanish extends ParserCommandBase {
     private final Lock vanishLock = new ReentrantLock();
     private final Set<UUID> iOptionList = new HashSet<>();
     private final Lock iOptionLock = new ReentrantLock();
-    private final ArgContainer.PlayerArgContainer playerArgContainer = new ArgContainer.PlayerArgContainer("player", true);
+    private final ArgContainer.PlayerArgContainer playerArgContainer = new ArgContainer.PlayerArgContainer("player",
+            true);
     private final ArgContainer.OptionArgContainer optionArgContainer = new ArgContainer.OptionArgContainer("-i");
 
     private final List<ChestData> chestInteractions = new ArrayList<>();
@@ -151,6 +152,13 @@ public class CommandVanish extends ParserCommandBase {
     }
 
     @Override
+    public void onDisable() {
+        this.vanishLock.lock();
+        this.vanishedPlayers.forEach(uuid -> this.vanishToggle(Bukkit.getPlayer(uuid)));
+        this.vanishLock.unlock();
+    }
+
+    @Override
     protected ICommandResult executePlayerCommand(final Player sender) {
         final Player otherPlayer = this.playerArgContainer.getResult();
         final String reply;
@@ -160,9 +168,11 @@ public class CommandVanish extends ParserCommandBase {
             this.vanishToggle(sender);
 
             if (this.isVanished(sender)) {
-                reply = String.format("%sVanish %senabled%s!", ChatColor.DARK_AQUA, ChatColor.GREEN, ChatColor.DARK_AQUA);
+                reply = String.format("%sVanish %senabled%s!", ChatColor.DARK_AQUA, ChatColor.GREEN,
+                        ChatColor.DARK_AQUA);
             } else {
-                reply = String.format("%sVanish %sdisabled%s!", ChatColor.DARK_AQUA, ChatColor.RED, ChatColor.DARK_AQUA);
+                reply = String.format("%sVanish %sdisabled%s!", ChatColor.DARK_AQUA, ChatColor.RED,
+                        ChatColor.DARK_AQUA);
             }
         } else {
             this.checkPermission(sender, PERM_VANISH_OTHERS);
@@ -171,11 +181,15 @@ public class CommandVanish extends ParserCommandBase {
             final String replyOther;
 
             if (this.isVanished(otherPlayer)) {
-                reply = String.format("%sVanish %senabled%s for %s%s%s!", ChatColor.DARK_AQUA, ChatColor.GREEN, ChatColor.DARK_AQUA, ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
-                replyOther = String.format("%sVanish %senabled%s!", ChatColor.DARK_AQUA, ChatColor.GREEN, ChatColor.DARK_AQUA);
+                reply = String.format("%sVanish %senabled%s for %s%s%s!", ChatColor.DARK_AQUA, ChatColor.GREEN,
+                        ChatColor.DARK_AQUA, ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
+                replyOther = String.format("%sVanish %senabled%s!", ChatColor.DARK_AQUA, ChatColor.GREEN,
+                        ChatColor.DARK_AQUA);
             } else {
-                reply = String.format("%sVanish %sdisabled%s for %s%s%s!", ChatColor.DARK_AQUA, ChatColor.RED, ChatColor.DARK_AQUA, ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
-                replyOther = String.format("%sVanish %sdisabled%s!", ChatColor.DARK_AQUA, ChatColor.RED, ChatColor.DARK_AQUA);
+                reply = String.format("%sVanish %sdisabled%s for %s%s%s!", ChatColor.DARK_AQUA, ChatColor.RED,
+                        ChatColor.DARK_AQUA, ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
+                replyOther = String.format("%sVanish %sdisabled%s!", ChatColor.DARK_AQUA, ChatColor.RED,
+                        ChatColor.DARK_AQUA);
             }
 
             PlayerUtils.sendMessageWithPrefix(otherPlayer, replyOther);
@@ -409,7 +423,8 @@ public class CommandVanish extends ParserCommandBase {
                 && event.getClickedBlock().getState() instanceof InventoryHolder
                 && this.isVanished(event.getPlayer())) {
             this.chestInteractionLock.lock();
-            this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(), event.getClickedBlock().getLocation()));
+            this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(),
+                    event.getClickedBlock().getLocation()));
             this.chestInteractionLock.unlock();
         }
     }

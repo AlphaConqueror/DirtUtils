@@ -12,7 +12,9 @@ import java.util.List;
 
 public final class Cli extends JavaPlugin {
 
-    public static final String PREFIX = String.format("%s[%s%sD%s%sU%s]%s ", ChatColor.GRAY, ChatColor.DARK_RED, ChatColor.BOLD, ChatColor.RED, ChatColor.BOLD, ChatColor.GRAY, ChatColor.RESET);
+    public static final String PREFIX = String.format("%s[%s%sD%s%sU%s]%s ", ChatColor.GRAY, ChatColor.DARK_RED,
+            ChatColor.BOLD, ChatColor.RED, ChatColor.BOLD, ChatColor.GRAY, ChatColor.RESET);
+    private final List<DirtCommandBase> commands = new ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -20,12 +22,15 @@ public final class Cli extends JavaPlugin {
         this.registerEvents();
     }
 
+    @Override
+    public void onDisable() {
+        this.commands.forEach(DirtCommandBase::onDisable);
+    }
+
     private void registerCommands() {
-        final List<DirtCommandBase> commands = new ArrayList<>();
+        this.commands.add(new CommandVanish(this));
 
-        commands.add(new CommandVanish(this));
-
-        commands.forEach(DirtCommandBase::register);
+        this.commands.forEach(DirtCommandBase::register);
     }
 
     private void registerEvents() {

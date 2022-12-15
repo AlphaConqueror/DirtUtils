@@ -28,15 +28,13 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
         this.command.setExecutor(this);
     }
 
-    protected PluginCommand getCommand() {
-        return this.command;
-    }
-
     public String getPrimaryAlias() {
         return this.primaryAlias;
     }
 
     public abstract String getCommandUsage();
+
+    public void onDisable() {}
 
     @Override
     public boolean onCommand(final CommandSender sender, final Command command, final String s, final String[] args) {

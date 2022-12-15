@@ -41,7 +41,8 @@ public abstract class CommandReplyResult implements ICommandResult {
 
         @Override
         public String getReply() {
-            return String.format("%s%sUsage: %s%s", Cli.PREFIX, ChatColor.DARK_AQUA, ChatColor.AQUA, this.command.getCommandUsage());
+            return String.format("%s%sUsage: %s%s", Cli.PREFIX, ChatColor.DARK_AQUA, ChatColor.AQUA,
+                    this.command.getCommandUsage());
         }
     }
 
@@ -72,7 +73,8 @@ public abstract class CommandReplyResult implements ICommandResult {
             }
 
             return String.format("%s%sThe command %s%s%s can not be executed %s.",
-                    Cli.PREFIX, this.sender instanceof Player ? ChatColor.DARK_AQUA : "", ChatColor.AQUA, this.command.getPrimaryAlias(), ChatColor.DARK_AQUA, s);
+                    Cli.PREFIX, this.sender instanceof Player ? ChatColor.DARK_AQUA : "", ChatColor.AQUA,
+                    this.command.getPrimaryAlias(), ChatColor.DARK_AQUA, s);
         }
     }
 
@@ -89,7 +91,8 @@ public abstract class CommandReplyResult implements ICommandResult {
 
         @Override
         public String getReply() {
-            return String.format("%s%sYou are missing the permission: %s%s", Cli.PREFIX, ChatColor.DARK_AQUA, ChatColor.AQUA, this.permission);
+            return String.format("%s%sYou are missing the permission: %s%s", Cli.PREFIX, ChatColor.DARK_AQUA,
+                    ChatColor.AQUA, this.permission);
         }
     }
 }
