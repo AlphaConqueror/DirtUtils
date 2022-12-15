@@ -2,6 +2,8 @@ package gg.dirtcraft.dirtutils;
 
 import gg.dirtcraft.dirtutils.commands.core.DirtCommandBase;
 import gg.dirtcraft.dirtutils.commands.player.CommandVanish;
+import gg.dirtcraft.dirtutils.misc.TabListManager;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -15,6 +17,7 @@ public final class Cli extends JavaPlugin {
     @Override
     public void onEnable() {
         this.registerCommands();
+        this.registerEvents();
     }
 
     private void registerCommands() {
@@ -23,5 +26,9 @@ public final class Cli extends JavaPlugin {
         commands.add(new CommandVanish(this));
 
         commands.forEach(DirtCommandBase::register);
+    }
+
+    private void registerEvents() {
+        Bukkit.getPluginManager().registerEvents(new TabListManager(), this);
     }
 }
