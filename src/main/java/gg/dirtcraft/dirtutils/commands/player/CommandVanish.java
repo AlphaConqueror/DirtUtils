@@ -45,6 +45,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class CommandVanish extends ParserCommandBase {
 
     // TODO: ArgContainers could potentially have a data race: fix (pass down as arguments and check instances)
+    // TODO: test #onDisable
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
@@ -154,6 +155,7 @@ public class CommandVanish extends ParserCommandBase {
     @Override
     public void onDisable() {
         this.vanishLock.lock();
+        // make everyone visible again
         this.vanishedPlayers.forEach(uuid -> this.vanishToggle(Bukkit.getPlayer(uuid)));
         this.vanishLock.unlock();
     }

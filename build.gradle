@@ -16,9 +16,13 @@ repositories {
 }
 
 dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.6'
+    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.6'
+
     compileOnly 'org.spigotmc:spigot-api:1.7.10-R0.1-SNAPSHOT'
     compileOnly 'org.spigotmc:spigot:1.7.10-R0.1-SNAPSHOT'
     compileOnly group: "com.comphenix.protocol", name: "ProtocolLib-Legacy", version: "3.7.0"
+    compileOnly 'net.luckperms:api:5.4'
 }
 
 def targetJavaVersion = 8
