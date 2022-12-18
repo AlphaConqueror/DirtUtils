@@ -1,4 +1,4 @@
-package gg.dirtcraft.dirtutils.commands.core;
+package gg.dirtcraft.dirtutils.commands.core.parser;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -7,22 +7,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class ArgContainer<T> {
+
+    private static long nextId = 0;
+    private final long id;
     private final String label;
     private final boolean isOptional;
-    private T result;
 
     protected ArgContainer(final String label, final boolean isOptional) {
+        this.id = nextId;
         this.label = label;
         this.isOptional = isOptional;
+
+        nextId++;
     }
 
-    public void computeParsedArg(final List<String> args) {
-        this.result = this.parse(args);
-    }
-
-    protected abstract T parse(final List<String> args);
+    public abstract T parse(final List<String> args);
 
     protected abstract String getTypeName();
+
+    public long getId() {
+        return this.id;
+    }
 
     public String getLabel() {
         return this.label;
@@ -30,10 +35,6 @@ public abstract class ArgContainer<T> {
 
     public boolean isOptional() {
         return this.isOptional;
-    }
-
-    public T getResult() {
-        return this.result;
     }
 
     @Override

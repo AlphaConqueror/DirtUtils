@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class TabListManager implements Listener {
 
-    // TODO: use Player#setPlayerListName to embed prefix from api/file
+    // TODO: Set log level via config.
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TabListManager.class);
     private static final int MAX_TEAM_NAME_LENGTH = 16;

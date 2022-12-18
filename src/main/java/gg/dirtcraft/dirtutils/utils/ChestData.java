@@ -1,4 +1,4 @@
-package gg.dirtcraft.dirtutils.commands.core;
+package gg.dirtcraft.dirtutils.utils;
 
 import org.bukkit.Location;
 

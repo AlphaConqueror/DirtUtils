@@ -75,7 +75,7 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
-    public void checkPermission(final Player player, final String permission) {
+    public void checkPermission(final Player player, final String permission) throws CommandPermissionException {
         final OfflinePlayer offlinePlayer = Bukkit.getPlayer(player.getUniqueId());
 
         if (offlinePlayer == null || !offlinePlayer.isOnline() || !offlinePlayer.getPlayer().hasPermission(permission)) {

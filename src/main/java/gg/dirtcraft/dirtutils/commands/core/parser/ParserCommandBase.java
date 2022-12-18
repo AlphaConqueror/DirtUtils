@@ -1,5 +1,6 @@
-package gg.dirtcraft.dirtutils.commands.core;
+package gg.dirtcraft.dirtutils.commands.core.parser;
 
+import gg.dirtcraft.dirtutils.commands.core.DirtCommandBase;
 import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
 import gg.dirtcraft.dirtutils.commands.core.result.ICommandResult;
 import org.bukkit.command.BlockCommandSender;
@@ -8,9 +9,7 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public abstract class ParserCommandBase extends DirtCommandBase {
 
@@ -45,38 +44,38 @@ public abstract class ParserCommandBase extends DirtCommandBase {
 
     @Override
     protected final ICommandResult executePlayerCommand(final Player sender, final String[] args) {
-        this.parse(args);
-        return this.executePlayerCommand(sender);
+        return this.executePlayerCommand(sender, this.parse(args));
     }
 
-    protected ICommandResult executePlayerCommand(final Player sender) {
+    protected ICommandResult executePlayerCommand(final Player sender, final Map<Long, Object> args) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
     @Override
     protected final ICommandResult executeConsoleCommand(final ConsoleCommandSender sender, final String[] args) {
-        return super.executeConsoleCommand(sender, args);
+        return this.executeConsoleCommand(sender, this.parse(args));
     }
 
-    protected ICommandResult executeConsoleCommand(final Player sender) {
+    protected ICommandResult executeConsoleCommand(final ConsoleCommandSender sender, final Map<Long, Object> args) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
     @Override
     protected final ICommandResult executeCommandBlockCommand(final BlockCommandSender sender, final String[] args) {
-        return super.executeCommandBlockCommand(sender, args);
+        return this.executeCommandBlockCommand(sender, this.parse(args));
     }
 
-    protected ICommandResult executeCommandBlockCommand(final Player sender) {
+    protected ICommandResult executeCommandBlockCommand(final BlockCommandSender sender, final Map<Long, Object> args) {
         return new CommandReplyResult.IllegalExecutor(this, sender);
     }
 
-    private List<ArgContainer<?>> parse(final String[] args) {
+    private Map<Long, Object> parse(final String[] args) {
+        final Map<Long, Object> parsedArgs = new HashMap<>();
         final List<String> argList = new ArrayList<>(Arrays.asList(args));
 
-        this.expectedArgs.forEach(argContainer -> argContainer.computeParsedArg(argList));
+        this.expectedArgs.forEach(argContainer -> parsedArgs.put(argContainer.getId(), argContainer.parse(argList)));
 
-        return this.expectedArgs;
+        return parsedArgs;
     }
 
     // add options in front to parse them first
