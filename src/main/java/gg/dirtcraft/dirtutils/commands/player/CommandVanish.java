@@ -12,6 +12,7 @@ import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
 import gg.dirtcraft.dirtutils.commands.core.result.ICommandResult;
 import gg.dirtcraft.dirtutils.utils.ChestData;
 import gg.dirtcraft.dirtutils.utils.PlayerUtils;
+import gg.dirtcraft.dirtutils.utils.VanishData;
 import net.minecraft.server.v1_7_R4.EntityPlayer;
 import net.minecraft.server.v1_7_R4.EntityTracker;
 import net.minecraft.server.v1_7_R4.EntityTrackerEntry;
@@ -44,15 +45,15 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class CommandVanish extends ParserCommandBase {
 
-    // TODO: ArgContainers could potentially have a data race: fix (pass down as arguments and check instances)
     // TODO: test #onDisable
+    // TODO: Add console command handling
+
+    // IDEA: cancel sound packets coming from vanished players (difficult)
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
-    private final Set<UUID> vanishedPlayers = new HashSet<>();
+    private final Set<VanishData> vanishedPlayers = new HashSet<>();
     private final Lock vanishLock = new ReentrantLock();
-    private final Set<UUID> iOptionList = new HashSet<>();
-    private final Lock iOptionLock = new ReentrantLock();
     private final ArgContainer.PlayerArgContainer playerArgContainer
             = new ArgContainer.PlayerArgContainer("player", true);
     private final ArgContainer.OptionArgContainer optionArgContainer = new ArgContainer.OptionArgContainer("-i");
@@ -77,23 +78,21 @@ public class CommandVanish extends ParserCommandBase {
                 new PacketAdapter(javaPlugin, ListenerPriority.HIGH, PacketType.Play.Server.BLOCK_ACTION) {
                     @Override
                     public void onPacketSending(final PacketEvent e) {
-                        if (e.getPacketType() == PacketType.Play.Server.BLOCK_ACTION) {
-                            final Player listener = e.getPlayer();
-                            final Location loc = new Location(listener.getWorld(),
-                                    (double) e.getPacket().getIntegers().read(0),
-                                    (double) e.getPacket().getIntegers().read(1),
-                                    (double) e.getPacket().getIntegers().read(2));
-                            final Block block = listener.getWorld().getBlockAt(loc);
+                        final Player listener = e.getPlayer();
+                        final Location loc = new Location(listener.getWorld(),
+                                (double) e.getPacket().getIntegers().read(0),
+                                (double) e.getPacket().getIntegers().read(1),
+                                (double) e.getPacket().getIntegers().read(2));
+                        final Block block = listener.getWorld().getBlockAt(loc);
 
-                            if (block.getState() instanceof InventoryHolder) {
-                                CommandVanish.this.chestInteractionLock.lock();
-                                final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
+                        if (block.getState() instanceof InventoryHolder) {
+                            CommandVanish.this.chestInteractionLock.lock();
+                            final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
 
-                                if (chestData != null) {
-                                    e.setCancelled(true);
-                                }
-                                CommandVanish.this.chestInteractionLock.unlock();
+                            if (chestData != null) {
+                                e.setCancelled(true);
                             }
+                            CommandVanish.this.chestInteractionLock.unlock();
                         }
                     }
                 });
@@ -104,30 +103,30 @@ public class CommandVanish extends ParserCommandBase {
                 new PacketAdapter(javaPlugin, ListenerPriority.HIGH, PacketType.Play.Server.NAMED_SOUND_EFFECT) {
                     @Override
                     public void onPacketSending(final PacketEvent e) {
-                        if (e.getPacketType() == PacketType.Play.Server.NAMED_SOUND_EFFECT) {
-                            if (!(e.getPacket().getStrings().read(0).equalsIgnoreCase("random.chestopen")
-                                    || e.getPacket().getStrings().read(0).equalsIgnoreCase("random.chestclosed"))) {
-                                return;
+                        final String soundName = e.getPacket().getStrings().read(0);
+
+                        if (!(soundName.equalsIgnoreCase("random.chestopen")
+                                || soundName.equalsIgnoreCase("random.chestclosed"))) {
+                            return;
+                        }
+
+                        final Player listener = e.getPlayer();
+                        // divide the location by 8, since it's a bit
+                        // obfuscated
+                        final Location loc = new Location(listener.getWorld(),
+                                e.getPacket().getIntegers().read(0) / 8.0,
+                                e.getPacket().getIntegers().read(1) / 8.0,
+                                e.getPacket().getIntegers().read(2) / 8.0);
+                        final Block block = listener.getWorld().getBlockAt(loc);
+
+                        if (block.getState() instanceof InventoryHolder) {
+                            CommandVanish.this.chestInteractionLock.lock();
+                            final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
+
+                            if (chestData != null) {
+                                e.setCancelled(true);
                             }
-
-                            final Player listener = e.getPlayer();
-                            // divide the location by 8, since it's a bit
-                            // obfuscated
-                            final Location loc = new Location(listener.getWorld(),
-                                    e.getPacket().getIntegers().read(0) / 8.0,
-                                    e.getPacket().getIntegers().read(1) / 8.0,
-                                    e.getPacket().getIntegers().read(2) / 8.0);
-                            final Block block = listener.getWorld().getBlockAt(loc);
-
-                            if (block.getState() instanceof InventoryHolder) {
-                                CommandVanish.this.chestInteractionLock.lock();
-                                final ChestData chestData = CommandVanish.this.getMostRecentChestData(loc);
-
-                                if (chestData != null) {
-                                    e.setCancelled(true);
-                                }
-                                CommandVanish.this.chestInteractionLock.unlock();
-                            }
+                            CommandVanish.this.chestInteractionLock.unlock();
                         }
                     }
                 });
@@ -156,7 +155,8 @@ public class CommandVanish extends ParserCommandBase {
     public void onDisable() {
         this.vanishLock.lock();
         // make everyone visible again
-        this.vanishedPlayers.forEach(uuid -> this.vanishToggle(Bukkit.getPlayer(uuid), false));
+        this.vanishedPlayers.forEach(vanishData -> this.vanishToggle(Bukkit.getPlayer(vanishData.getUniqueId()),
+                false));
         this.vanishLock.unlock();
     }
 
@@ -166,22 +166,23 @@ public class CommandVanish extends ParserCommandBase {
         final boolean iOption = (boolean) args.get(this.optionArgContainer.getId());
         final String reply;
 
-        if (otherPlayer == null) {
+        if (otherPlayer == null || otherPlayer.getUniqueId().equals(sender.getUniqueId())) {
             this.checkPermission(sender, PERM_VANISH_SELF);
             this.vanishToggle(sender, iOption);
 
-            reply = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, this.isVanished(sender) ?
+            reply = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, this.getVanishedPlayer(sender).isPresent() ?
                     ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA);
         } else {
             this.checkPermission(sender, PERM_VANISH_OTHERS);
             this.vanishToggle(otherPlayer, iOption);
 
             final String replyOther;
+            final boolean isVanished = this.getVanishedPlayer(otherPlayer).isPresent();
 
-            reply = String.format("%sVanish %s%s for %s%s%s!", ChatColor.DARK_AQUA, this.isVanished(otherPlayer) ?
+            reply = String.format("%sVanish %s%s for %s%s%s!", ChatColor.DARK_AQUA, isVanished ?
                             ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA,
                     ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
-            replyOther = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, this.isVanished(otherPlayer) ?
+            replyOther = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, isVanished ?
                     ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA);
 
             PlayerUtils.sendMessageWithPrefix(otherPlayer, replyOther);
@@ -192,7 +193,7 @@ public class CommandVanish extends ParserCommandBase {
 
     private void vanishToggle(final Player player, final boolean iOption) {
         this.vanishLock.lock();
-        this.vanish(player, !this.isVanished(player), iOption);
+        this.vanish(player, !this.getVanishedPlayer(player).isPresent(), iOption);
         this.vanishLock.unlock();
     }
 
@@ -202,28 +203,8 @@ public class CommandVanish extends ParserCommandBase {
      * @param player The player in question.
      * @return True, if the player is vanished, false, if otherwise.
      */
-    private boolean isVanished(final Player player) {
-        return this.vanishedPlayers.contains(player.getUniqueId());
-    }
-
-    private boolean hasIOptionEnabled(final Player player) {
-        this.iOptionLock.lock();
-        final boolean hasIOptionEnabled = this.iOptionList.contains(player.getUniqueId());
-        this.iOptionLock.unlock();
-
-        return hasIOptionEnabled;
-    }
-
-    private void enableIOption(final Player player) {
-        this.iOptionLock.lock();
-        this.iOptionList.add(player.getUniqueId());
-        this.iOptionLock.unlock();
-    }
-
-    private void disableIOption(final Player player) {
-        this.iOptionLock.lock();
-        this.iOptionList.remove(player.getUniqueId());
-        this.iOptionLock.unlock();
+    private Optional<VanishData> getVanishedPlayer(final Player player) {
+        return this.vanishedPlayers.stream().filter(vanishData -> vanishData.getUniqueId().equals(player.getUniqueId())).findFirst();
     }
 
     /**
@@ -233,17 +214,16 @@ public class CommandVanish extends ParserCommandBase {
      * @param state  If vanish should be enabled or not.
      */
     private void vanish(final Player player, final boolean state, final boolean iOption) {
-        assert state != this.isVanished(player) : "Tried to un-/vanish player twice!";
+        final Optional<VanishData> vanishedPlayer = this.getVanishedPlayer(player);
+
+        assert state != vanishedPlayer.isPresent() : "Tried to un-/vanish player twice!";
 
         final Set<Player> players = new HashSet<>(Bukkit.getOnlinePlayers());
 
         // remove vanished players from the list of all players that should not be able to see the player
-        this.vanishedPlayers.forEach(uuid -> players.removeIf(p -> p.getUniqueId().equals(uuid)));
+        this.vanishedPlayers.forEach(vanishData -> players.removeIf(p -> p.getUniqueId().equals(vanishData.getUniqueId())));
 
         if (state) {
-            // add player to the list of all vanished players
-            this.vanishedPlayers.add(player.getUniqueId());
-
             // hide player from all players that should not be able to see the player
             for (final Player p : players) {
                 if (p.getUniqueId().equals(player.getUniqueId())) {
@@ -254,16 +234,11 @@ public class CommandVanish extends ParserCommandBase {
             }
 
             // show vanished players to player
-            for (final UUID uuid : this.vanishedPlayers) {
-                if (uuid.equals(player.getUniqueId())) {
-                    continue;
-                }
+            for (final VanishData vanishData : this.vanishedPlayers) {
+                final UUID uuid = vanishData.getUniqueId();
 
                 this.showPlayer(player, Bukkit.getPlayer(uuid));
             }
-
-            // remove player from tab list for unvanished player
-            //this.removeFromTabList(player, players);
 
             // remove player as target from all creatures in a 70 block radius
             final List<Entity> nearbyEntities = player.getNearbyEntities(70, 70, 70);
@@ -276,15 +251,24 @@ public class CommandVanish extends ParserCommandBase {
                 }
             }
 
-            if (iOption) {
-                this.enableIOption(player);
-            } else {
+            if (!iOption) {
                 // remove collision
                 player.spigot().setCollidesWithEntities(false);
             }
+
+            // add player to the list of all vanished players
+            this.vanishedPlayers.add(new VanishData(player.getUniqueId(), iOption));
         } else {
+            final VanishData vanishData =
+                    this.vanishedPlayers.stream().filter(vd -> vd.getUniqueId().equals(player.getUniqueId())).findFirst().orElseThrow(AssertionError::new);
+
+            if (!iOption) {
+                // add collision back
+                player.spigot().setCollidesWithEntities(true);
+            }
+
             // remove player from the list of all vanished players
-            this.vanishedPlayers.remove(player.getUniqueId());
+            this.vanishedPlayers.remove(vanishData);
 
             // show player to all online players
             for (final Player p : players) {
@@ -296,19 +280,10 @@ public class CommandVanish extends ParserCommandBase {
             }
 
             // hide vanished players from player
-            for (final UUID uuid : this.vanishedPlayers) {
-                if (uuid.equals(player.getUniqueId())) {
-                    continue;
-                }
+            for (final VanishData vd : this.vanishedPlayers) {
+                final UUID uuid = vd.getUniqueId();
 
                 player.hidePlayer(Bukkit.getPlayer(uuid));
-            }
-
-            if (this.hasIOptionEnabled(player)) {
-                this.disableIOption(player);
-            } else {
-                // add collision back
-                player.spigot().setCollidesWithEntities(true);
             }
         }
     }
@@ -354,12 +329,12 @@ public class CommandVanish extends ParserCommandBase {
 
         // hide vanished players from player
         this.vanishLock.lock();
-        for (final UUID uuid : this.vanishedPlayers) {
-            if (uuid.equals(player.getUniqueId())) {
+        for (final VanishData vanishData : this.vanishedPlayers) {
+            if (vanishData.getUniqueId().equals(player.getUniqueId())) {
                 continue;
             }
 
-            player.hidePlayer(Bukkit.getPlayer(uuid));
+            player.hidePlayer(Bukkit.getPlayer(vanishData.getUniqueId()));
         }
         this.vanishLock.unlock();
     }
@@ -368,31 +343,29 @@ public class CommandVanish extends ParserCommandBase {
     public void onPlayerQuit(final PlayerQuitEvent event) {
         final Player player = event.getPlayer();
 
-        if (this.isVanished(player)) {
+        if (this.getVanishedPlayer(player).isPresent()) {
             // remove player from the list of all vanished players
             this.vanishLock.lock();
-            this.vanishedPlayers.removeIf(uuid -> uuid.equals(player.getUniqueId()));
+            this.vanishedPlayers.removeIf(vanishData -> vanishData.getUniqueId().equals(player.getUniqueId()));
             this.vanishLock.unlock();
 
             // showing player to all players (idk, thank 1.7.10)
             Bukkit.getOnlinePlayers().forEach(p -> this.showPlayer(p, player));
         }
-
-        if (this.hasIOptionEnabled(player)) {
-            this.disableIOption(player);
-        }
     }
 
     @EventHandler
     public void onEntityTarget(final EntityTargetEvent event) {
-        if (event.getTarget() instanceof Player && this.isVanished((Player) event.getTarget())) {
+        if (event.getTarget() instanceof Player && this.getVanishedPlayer((Player) event.getTarget()).isPresent()) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler
-    public void onEntityTarget(final PlayerDropItemEvent event) {
-        if (this.hasIOptionEnabled(event.getPlayer())) {
+    public void onPlayerDropItem(final PlayerDropItemEvent event) {
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(event.getPlayer());
+
+        if (vanishData.isPresent() && !vanishData.get().hasIOption()) {
             event.setCancelled(true);
         }
     }
@@ -401,7 +374,7 @@ public class CommandVanish extends ParserCommandBase {
     public void onPlayerInteract(final PlayerInteractEvent event) {
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK
                 && event.getClickedBlock().getState() instanceof InventoryHolder
-                && this.isVanished(event.getPlayer())) {
+                && this.getVanishedPlayer(event.getPlayer()).isPresent()) {
             this.chestInteractionLock.lock();
             this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(),
                     event.getClickedBlock().getLocation()));
@@ -411,7 +384,7 @@ public class CommandVanish extends ParserCommandBase {
 
     @EventHandler
     public void onInventoryOpen(final InventoryOpenEvent event) {
-        if (!(event.getPlayer() instanceof Player) || !this.isVanished((Player) event.getPlayer())) {
+        if (!(event.getPlayer() instanceof Player) || !this.getVanishedPlayer((Player) event.getPlayer()).isPresent()) {
             return;
         }
 
@@ -431,7 +404,7 @@ public class CommandVanish extends ParserCommandBase {
 
     @EventHandler
     public void onInventoryClose(final InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player) || event.getInventory().getHolder() instanceof Player || !this.isVanished((Player) event.getPlayer())) {
+        if (!(event.getPlayer() instanceof Player) || event.getInventory().getHolder() instanceof Player || !this.getVanishedPlayer((Player) event.getPlayer()).isPresent()) {
             return;
         }
 
