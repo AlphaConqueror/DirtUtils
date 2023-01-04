@@ -6,3 +6,6 @@ commands:
   vanish:
     description: "Hides player from others. Option '-i': enables inventory actions."
     aliases: [v]
+  dirtutils:
+    description: "Main command of the DirtUtils plugin."
+    aliases: [du]

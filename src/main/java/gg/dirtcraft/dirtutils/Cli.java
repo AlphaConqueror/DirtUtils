@@ -1,5 +1,6 @@
 package gg.dirtcraft.dirtutils;
 
+import gg.dirtcraft.dirtutils.commands.basic.CommandDirtutils;
 import gg.dirtcraft.dirtutils.commands.core.DirtCommandBase;
 import gg.dirtcraft.dirtutils.commands.player.CommandVanish;
 import gg.dirtcraft.dirtutils.tablist.TabListManager;
@@ -32,6 +33,9 @@ public final class Cli extends JavaPlugin {
 
     private void registerCommands() {
         this.commands.add(new CommandVanish(this));
+
+        // keep at the bottom for all commands to be available via dirtutils command
+        this.commands.add(new CommandDirtutils(this, this.commands));
 
         this.commands.forEach(DirtCommandBase::register);
     }

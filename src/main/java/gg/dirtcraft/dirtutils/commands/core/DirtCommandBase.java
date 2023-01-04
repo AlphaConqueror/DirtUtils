@@ -49,7 +49,7 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
         return true;
     }
 
-    protected ICommandResult executeCommand(final CommandSender sender, final String[] args) {
+    public ICommandResult executeCommand(final CommandSender sender, final String[] args) {
         try {
             if (sender instanceof Player) {
                 return this.executePlayerCommand((Player) sender, args);

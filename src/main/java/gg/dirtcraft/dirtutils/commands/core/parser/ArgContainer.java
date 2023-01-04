@@ -99,4 +99,21 @@ public abstract class ArgContainer<T> {
             return "";
         }
     }
+
+    public static class WordArgContainer extends ArgContainer<String> {
+
+        public WordArgContainer(final String label, final boolean isOptional) {
+            super(label, isOptional);
+        }
+
+        @Override
+        public String parse(final List<String> args) {
+            return args.get(0);
+        }
+
+        @Override
+        protected String getTypeName() {
+            return "Word";
+        }
+    }
 }
