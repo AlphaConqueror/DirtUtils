@@ -87,4 +87,8 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
     protected void registerEvents() {
         Bukkit.getServer().getPluginManager().registerEvents(this, this.javaPlugin);
     }
+
+    protected JavaPlugin getJavaPlugin() {
+        return this.javaPlugin;
+    }
 }

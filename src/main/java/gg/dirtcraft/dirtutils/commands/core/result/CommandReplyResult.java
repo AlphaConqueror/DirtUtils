@@ -24,7 +24,7 @@ public abstract class CommandReplyResult implements ICommandResult {
 
         @Override
         public String getReply() {
-            return Cli.PREFIX + ChatColor.DARK_AQUA + this.reply;
+            return Cli.PREFIX + this.reply;
         }
     }
 
