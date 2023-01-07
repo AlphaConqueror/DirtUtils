@@ -59,9 +59,11 @@ public abstract class ArgContainer<T> {
             }
 
             final Player player = Bukkit.getOnlinePlayers().stream()
-                    .filter(p -> p.getName().startsWith(args.get(0))).findFirst().orElse(null);
+                    .filter(p -> p.getName().toLowerCase().startsWith(args.get(0).toLowerCase())).findFirst().orElse(null);
 
-            args.remove(0);
+            if (player != null) {
+                args.remove(0);
+            }
 
             return player;
         }
@@ -85,7 +87,7 @@ public abstract class ArgContainer<T> {
 
             // make copy of list to avoid concurrent modification exception
             for (final String arg : new ArrayList<>(args)) {
-                if (arg.equals(this.getLabel())) {
+                if (arg.equalsIgnoreCase(this.getLabel())) {
                     foundOption = true;
                     args.remove(arg);
                 }
@@ -100,20 +102,26 @@ public abstract class ArgContainer<T> {
         }
     }
 
-    public static class WordArgContainer extends ArgContainer<String> {
+    public static class SubCommandArgContainer extends ArgContainer<Boolean> {
 
-        public WordArgContainer(final String label, final boolean isOptional) {
-            super(label, isOptional);
+        public SubCommandArgContainer(final String label) {
+            super(label, true);
         }
 
         @Override
-        public String parse(final List<String> args) {
-            return args.get(0);
+        public Boolean parse(final List<String> args) {
+            if (args.size() == 0 || !this.getLabel().equalsIgnoreCase(args.get(0))) {
+                return false;
+            }
+
+            args.remove(args.get(0));
+
+            return true;
         }
 
         @Override
         protected String getTypeName() {
-            return "Word";
+            return "";
         }
     }
 }

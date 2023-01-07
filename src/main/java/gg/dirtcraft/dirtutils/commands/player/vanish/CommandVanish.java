@@ -1,4 +1,4 @@
-package gg.dirtcraft.dirtutils.commands.player;
+package gg.dirtcraft.dirtutils.commands.player.vanish;
 
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
@@ -6,6 +6,7 @@ import com.comphenix.protocol.events.ListenerPriority;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
+import gg.dirtcraft.dirtutils.Cli;
 import gg.dirtcraft.dirtutils.commands.core.parser.ArgContainer;
 import gg.dirtcraft.dirtutils.commands.core.parser.ParserCommandBase;
 import gg.dirtcraft.dirtutils.commands.core.result.CommandReplyResult;
@@ -28,6 +29,8 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
@@ -52,11 +55,16 @@ public class CommandVanish extends ParserCommandBase {
 
     private static final String PERM_VANISH_SELF = "dirtutils.vanish";
     private static final String PERM_VANISH_OTHERS = "dirtutils.vanish.others";
+
     private final Set<VanishData> vanishedPlayers = new HashSet<>();
     private final Lock vanishLock = new ReentrantLock();
+
+    private final ArgContainer.OptionArgContainer iOptionArgContainer = new ArgContainer.OptionArgContainer("-i");
+    private final ArgContainer.OptionArgContainer bOptionArgContainer = new ArgContainer.OptionArgContainer("-b");
     private final ArgContainer.PlayerArgContainer playerArgContainer
             = new ArgContainer.PlayerArgContainer("player", true);
-    private final ArgContainer.OptionArgContainer optionArgContainer = new ArgContainer.OptionArgContainer("-i");
+    private final ArgContainer.SubCommandArgContainer subCommandArgContainer
+            = new ArgContainer.SubCommandArgContainer("info");
 
     private final List<ChestData> chestInteractions = new ArrayList<>();
     private final Lock chestInteractionLock = new ReentrantLock();
@@ -64,8 +72,10 @@ public class CommandVanish extends ParserCommandBase {
     public CommandVanish(final JavaPlugin javaPlugin) {
         super(javaPlugin, "vanish");
 
+        this.addExpectedArg(this.iOptionArgContainer);
+        this.addExpectedArg(this.bOptionArgContainer);
         this.addExpectedArg(this.playerArgContainer);
-        this.addExpectedArg(this.optionArgContainer);
+        this.addExpectedArg(this.subCommandArgContainer);
 
         this.registerEvents();
 
@@ -92,6 +102,7 @@ public class CommandVanish extends ParserCommandBase {
                             if (chestData != null) {
                                 e.setCancelled(true);
                             }
+
                             CommandVanish.this.chestInteractionLock.unlock();
                         }
                     }
@@ -126,6 +137,7 @@ public class CommandVanish extends ParserCommandBase {
                             if (chestData != null) {
                                 e.setCancelled(true);
                             }
+
                             CommandVanish.this.chestInteractionLock.unlock();
                         }
                     }
@@ -156,45 +168,122 @@ public class CommandVanish extends ParserCommandBase {
         this.vanishLock.lock();
         // make everyone visible again
         this.vanishedPlayers.forEach(vanishData -> this.vanishToggle(Bukkit.getPlayer(vanishData.getUniqueId()),
-                false));
+                false, false));
         this.vanishLock.unlock();
     }
 
     @Override
     protected ICommandResult executePlayerCommand(final Player sender, final Map<Long, Object> args) {
         final Player otherPlayer = (Player) args.get(this.playerArgContainer.getId());
-        final boolean iOption = (boolean) args.get(this.optionArgContainer.getId());
+
+        final boolean iOption = (boolean) args.get(this.iOptionArgContainer.getId());
+        final boolean bOption = (boolean) args.get(this.bOptionArgContainer.getId());
+        final boolean infoSubCommand = (boolean) args.get(this.subCommandArgContainer.getId());
         final String reply;
 
-        if (otherPlayer == null || otherPlayer.getUniqueId().equals(sender.getUniqueId())) {
-            this.checkPermission(sender, PERM_VANISH_SELF);
-            this.vanishToggle(sender, iOption);
+        this.vanishLock.lock();
 
-            reply = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, this.getVanishedPlayer(sender).isPresent() ?
-                    ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA);
-        } else {
-            this.checkPermission(sender, PERM_VANISH_OTHERS);
-            this.vanishToggle(otherPlayer, iOption);
+        try {
+            if (otherPlayer == null || otherPlayer.getUniqueId().equals(sender.getUniqueId())) {
+                this.checkPermission(sender, PERM_VANISH_SELF);
 
-            final String replyOther;
-            final boolean isVanished = this.getVanishedPlayer(otherPlayer).isPresent();
+                if (infoSubCommand) {
+                    return new CommandReplyResult.Success(this.generateVanishInfoSubCommand(sender));
+                }
 
-            reply = String.format("%sVanish %s%s for %s%s%s!", ChatColor.DARK_AQUA, isVanished ?
-                            ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA,
-                    ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA);
-            replyOther = String.format("%sVanish %s%s!", ChatColor.DARK_AQUA, isVanished ?
-                    ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA);
+                Optional<VanishData> vanishData = this.getVanishedPlayer(sender);
 
-            PlayerUtils.sendMessageWithPrefix(otherPlayer, replyOther);
+                if (vanishData.isPresent() && (iOption || bOption)) {
+                    if (iOption) {
+                        this.iOptionToggle(sender, vanishData.get());
+                    }
+
+                    if (bOption) {
+                        this.bOptionToggle(vanishData.get());
+                    }
+
+                    return new CommandReplyResult.Success(String.format("%sVanish has been %smodified%s!",
+                            ChatColor.DARK_AQUA, ChatColor.AQUA, ChatColor.DARK_AQUA)
+                            + this.generateVanishStatusInfo(vanishData.orElse(null)));
+                }
+
+                this.vanishToggle(sender, iOption, bOption);
+
+                // update vanish data after toggle
+                vanishData = this.getVanishedPlayer(sender);
+
+                reply = String.format("%sVanish has been %s%s!", ChatColor.DARK_AQUA,
+                        vanishData.isPresent() ?
+                                ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA)
+                        + this.generateVanishOptionInfo(vanishData.orElse(null));
+            } else {
+                this.checkPermission(sender, PERM_VANISH_OTHERS);
+
+                if (infoSubCommand) {
+                    return new CommandReplyResult.Success(this.generateVanishInfoSubCommand(otherPlayer));
+                }
+
+                Optional<VanishData> vanishData = this.getVanishedPlayer(otherPlayer);
+
+                if (vanishData.isPresent() && (iOption || bOption)) {
+                    if (iOption) {
+                        this.iOptionToggle(otherPlayer, vanishData.get());
+                    }
+
+                    if (bOption) {
+                        this.bOptionToggle(vanishData.get());
+                    }
+
+                    PlayerUtils.sendMessageWithPrefix(otherPlayer,
+                            String.format("%sVanish has been %smodified%s by %s%s%s!",
+                                    ChatColor.DARK_AQUA, ChatColor.AQUA, ChatColor.DARK_AQUA, ChatColor.AQUA,
+                                    sender.getDisplayName(), ChatColor.DARK_AQUA)
+                                    + this.generateVanishStatusInfo(vanishData.orElse(null)));
+
+                    return new CommandReplyResult.Success(String.format("%sVanish of %s%s%s has been %smodified%s!",
+                            ChatColor.DARK_AQUA, ChatColor.AQUA, otherPlayer.getDisplayName(), ChatColor.DARK_AQUA,
+                            ChatColor.AQUA, ChatColor.DARK_AQUA)
+                            + this.generateVanishStatusInfo(vanishData.orElse(null)));
+                }
+
+                this.vanishToggle(otherPlayer, iOption, bOption);
+
+                // update vanish data after toggle
+                vanishData = this.getVanishedPlayer(otherPlayer);
+
+                reply = String.format("%sVanish of %s%s%s has been %s%s!", ChatColor.DARK_AQUA, ChatColor.AQUA,
+                        otherPlayer.getDisplayName(), ChatColor.DARK_AQUA, vanishData.isPresent() ?
+                                ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled", ChatColor.DARK_AQUA)
+                        + this.generateVanishOptionInfo(vanishData.orElse(null));
+
+                PlayerUtils.sendMessageWithPrefix(otherPlayer, String.format("%sVanish has been %s%s by %s%s!",
+                        ChatColor.DARK_AQUA, vanishData.isPresent() ? ChatColor.GREEN + "enabled" : ChatColor.RED +
+                                "disabled", ChatColor.DARK_AQUA, sender.getDisplayName(), ChatColor.DARK_AQUA)
+                        + this.generateVanishOptionInfo(vanishData.orElse(null)));
+            }
+
+            return new CommandReplyResult.Success(reply);
+        } finally {
+            this.vanishLock.unlock();
         }
-
-        return new CommandReplyResult.Success(reply);
     }
 
-    private void vanishToggle(final Player player, final boolean iOption) {
-        this.vanishLock.lock();
-        this.vanish(player, !this.getVanishedPlayer(player).isPresent(), iOption);
-        this.vanishLock.unlock();
+    private void vanishToggle(final Player player, final boolean iOption, final boolean bOption) {
+        this.vanish(player, !this.getVanishedPlayer(player).isPresent(), iOption, bOption);
+    }
+
+    private void iOptionToggle(final Player player, final VanishData vanishData) {
+        vanishData.setIOption(!vanishData.hasIOption());
+
+        if (vanishData.hasIOption()) {
+            this.enableIOption(player);
+        } else {
+            this.disableIOption(player);
+        }
+    }
+
+    private void bOptionToggle(final VanishData vanishData) {
+        vanishData.setBOption(!vanishData.hasBOption());
     }
 
     /**
@@ -213,7 +302,7 @@ public class CommandVanish extends ParserCommandBase {
      * @param player The player that should be vanished.
      * @param state  If vanish should be enabled or not.
      */
-    private void vanish(final Player player, final boolean state, final boolean iOption) {
+    private void vanish(final Player player, final boolean state, final boolean iOption, final boolean bOption) {
         final Optional<VanishData> vanishedPlayer = this.getVanishedPlayer(player);
 
         assert state != vanishedPlayer.isPresent() : "Tried to un-/vanish player twice!";
@@ -251,13 +340,13 @@ public class CommandVanish extends ParserCommandBase {
                 }
             }
 
+            // add player to the list of all vanished players
+            this.vanishedPlayers.add(new VanishData(player.getUniqueId(), iOption, bOption));
+
             if (!iOption) {
                 // remove collision
                 player.spigot().setCollidesWithEntities(false);
             }
-
-            // add player to the list of all vanished players
-            this.vanishedPlayers.add(new VanishData(player.getUniqueId(), iOption));
         } else {
             final VanishData vanishData =
                     this.vanishedPlayers.stream().filter(vd -> vd.getUniqueId().equals(player.getUniqueId())).findFirst().orElseThrow(AssertionError::new);
@@ -323,7 +412,60 @@ public class CommandVanish extends ParserCommandBase {
         }
     }
 
+    private String generateVanishInfoSubCommand(final Player player) {
+        String message = "";
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(player);
+
+        message += String.format("%sVanish information about %s%s%s!", ChatColor.DARK_AQUA,
+                ChatColor.AQUA, player.getDisplayName(), ChatColor.DARK_AQUA)
+                + this.generateVanishStatusInfo(vanishData.orElse(null));
+
+        return message;
+    }
+
+    // only shown when vanish is enabled
+    private String generateVanishStatusInfo(final VanishData vanishData) {
+        return String.format("\n%s%s%s>%s Status: %s", Cli.PREFIX, ChatColor.AQUA, ChatColor.BOLD,
+                ChatColor.DARK_AQUA, vanishData == null ? ChatColor.RED + "disabled" : ChatColor.GREEN + "enabled")
+                + this.generateVanishOptionInfo(vanishData);
+    }
+
+    private String generateVanishOptionInfo(final VanishData vanishData) {
+        String message = "";
+
+        if (vanishData != null) {
+            // i option
+            message += String.format("\n%s%s%s>%s [%s-i%s]:%s inventory actions", Cli.PREFIX,
+                    ChatColor.AQUA, ChatColor.BOLD, ChatColor.DARK_AQUA, ChatColor.AQUA, ChatColor.DARK_AQUA,
+                    vanishData.hasIOption() ? ChatColor.GREEN : ChatColor.RED);
+            // b option
+            message += String.format("\n%s%s%s>%s [%s-b%s]:%s block actions", Cli.PREFIX,
+                    ChatColor.AQUA, ChatColor.BOLD, ChatColor.DARK_AQUA, ChatColor.AQUA, ChatColor.DARK_AQUA,
+                    vanishData.hasBOption() ? ChatColor.GREEN : ChatColor.RED);
+        }
+
+        return message;
+    }
+
+    private void enableIOption(final Player player) {
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(player);
+
+        assert vanishData.isPresent();
+        vanishData.get().setIOption(true);
+
+        player.spigot().setCollidesWithEntities(true);
+    }
+
+    private void disableIOption(final Player player) {
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(player);
+
+        vanishData.ifPresent(data -> data.setIOption(false));
+
+        player.spigot().setCollidesWithEntities(false);
+    }
+
     @EventHandler
+
     public void onPlayerJoin(final PlayerJoinEvent event) {
         final Player player = event.getPlayer();
 
@@ -372,9 +514,16 @@ public class CommandVanish extends ParserCommandBase {
 
     @EventHandler
     public void onPlayerInteract(final PlayerInteractEvent event) {
-        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
-                && event.getClickedBlock().getState() instanceof InventoryHolder
-                && this.getVanishedPlayer(event.getPlayer()).isPresent()) {
+        // ignore if player is not vanished
+        if (!this.getVanishedPlayer(event.getPlayer()).isPresent()) {
+            return;
+        }
+
+        if (event.getAction() == Action.PHYSICAL) {
+            // disable pressure plates
+            event.setCancelled(true);
+        } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.getClickedBlock().getState() instanceof InventoryHolder) {
             this.chestInteractionLock.lock();
             this.chestInteractions.add(new ChestData(event.getPlayer().getUniqueId(),
                     event.getClickedBlock().getLocation()));
@@ -417,5 +566,23 @@ public class CommandVanish extends ParserCommandBase {
         chestData.ifPresent(ChestData::updateMillis);
 
         this.chestInteractionLock.unlock();
+    }
+
+    @EventHandler
+    public void onBlockBreak(final BlockBreakEvent event) {
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(event.getPlayer());
+
+        if (vanishData.isPresent() && !vanishData.get().hasBOption()) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onBlockPlace(final BlockPlaceEvent event) {
+        final Optional<VanishData> vanishData = this.getVanishedPlayer(event.getPlayer());
+
+        if (vanishData.isPresent() && !vanishData.get().hasBOption()) {
+            event.setCancelled(true);
+        }
     }
 }

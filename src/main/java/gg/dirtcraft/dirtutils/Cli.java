@@ -2,7 +2,7 @@ package gg.dirtcraft.dirtutils;
 
 import gg.dirtcraft.dirtutils.commands.basic.CommandDirtutils;
 import gg.dirtcraft.dirtutils.commands.core.DirtCommandBase;
-import gg.dirtcraft.dirtutils.commands.player.CommandVanish;
+import gg.dirtcraft.dirtutils.commands.player.vanish.CommandVanish;
 import gg.dirtcraft.dirtutils.tablist.TabListManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;

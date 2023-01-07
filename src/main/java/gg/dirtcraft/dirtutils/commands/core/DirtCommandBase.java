@@ -10,11 +10,18 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+
 public abstract class DirtCommandBase implements CommandExecutor, Listener {
 
     private final JavaPlugin javaPlugin;
     private final PluginCommand command;
     private final String primaryAlias;
+
+    private final Set<DirtCommandBase> subCommands = new HashSet<>();
 
     protected DirtCommandBase(final JavaPlugin javaPlugin, final String primaryAlias) {
         this.javaPlugin = javaPlugin;
@@ -50,6 +57,16 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
     }
 
     public ICommandResult executeCommand(final CommandSender sender, final String[] args) {
+        // handle sub-command
+        if (args.length > 0) {
+            final Optional<DirtCommandBase> subCommand =
+                    this.subCommands.stream().filter(dcb -> dcb.getPrimaryAlias().equals(args[0])).findFirst();
+
+            if (subCommand.isPresent()) {
+                return subCommand.get().executeCommand(sender, Arrays.copyOfRange(args, 1, args.length));
+            }
+        }
+
         try {
             if (sender instanceof Player) {
                 return this.executePlayerCommand((Player) sender, args);
@@ -90,5 +107,13 @@ public abstract class DirtCommandBase implements CommandExecutor, Listener {
 
     protected JavaPlugin getJavaPlugin() {
         return this.javaPlugin;
+    }
+
+    protected void addSubCommand(final DirtCommandBase dirtCommandBase) {
+        assert this.subCommands.stream().noneMatch(dcb -> dcb.getPrimaryAlias().equals(dirtCommandBase.getPrimaryAlias()))
+                : String.format("Sub-command list already contains sub-command with primary alias '%s'.",
+                dirtCommandBase.getPrimaryAlias());
+
+        this.subCommands.add(dirtCommandBase);
     }
 }
